@@ -24,9 +24,13 @@ type Question = {
   difficulty: string | null;
 };
 
+type RawQuestion = Omit<Question, "correct_answer"> & {
+  correct_answer: string;
+};
+
 type MockTestQuestionRow = {
   question_order: number;
-  questions: Question | null;
+  questions: RawQuestion | RawQuestion[] | null;
 };
 
 async function getMockTest(testSlug: string) {
@@ -69,10 +73,19 @@ async function getMockTest(testSlug: string) {
     console.error("Failed to fetch mock test questions:", questionsError.message);
   }
 
-  const questions =
-    ((rows ?? []) as MockTestQuestionRow[])
-      .map((row) => row.questions)
-      .filter((question): question is Question => Boolean(question));
+  const questions = ((rows ?? []) as unknown as MockTestQuestionRow[])
+    .map((row) => {
+      if (Array.isArray(row.questions)) {
+        return row.questions[0] ?? null;
+      }
+
+      return row.questions;
+    })
+    .filter((question): question is RawQuestion => Boolean(question))
+    .map((question) => ({
+      ...question,
+      correct_answer: question.correct_answer as Question["correct_answer"],
+    }));
 
   return {
     title: mockTest.title as string,
