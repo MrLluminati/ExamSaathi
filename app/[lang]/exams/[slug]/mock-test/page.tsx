@@ -111,13 +111,12 @@ export default async function MockTestPage({ params }: PageProps) {
                   <p>Language: {test.language.toUpperCase()}</p>
                 </div>
 
-                <button
-                  type="button"
-                  disabled
-                  className="mt-4 w-full rounded-xl bg-slate-200 px-4 py-3 text-sm font-semibold text-slate-500"
+                <Link
+                   href={`/${lang}/exams/${slug}/mock-test/${test.slug}`}
+                   className="mt-4 block w-full rounded-xl bg-blue-700 px-4 py-3 text-center text-sm font-semibold text-white"
                 >
-                  Quiz Engine Coming Soon
-                </button>
+                  Start Test
+                </Link>
               </article>
             ))}
           </div>
