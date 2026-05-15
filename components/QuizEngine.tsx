@@ -39,7 +39,6 @@ export default function QuizEngine({
   questions,
 }: QuizEngineProps) {
   const totalSeconds = durationMinutes * 60;
-
   const submitStartedRef = useRef(false);
 
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -87,6 +86,7 @@ export default function QuizEngine({
     if (remainingSeconds === 0 && !isSubmitted && questions.length > 0) {
       void submitTest("auto");
     }
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [remainingSeconds, isSubmitted, questions.length]);
 
@@ -218,7 +218,10 @@ export default function QuizEngine({
             </div>
           </div>
 
-          <p className="mt-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
+          <p
+            aria-live="polite"
+            className="mt-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-700"
+          >
             {isSaving ? "Saving result..." : saveMessage}
           </p>
         </section>
@@ -297,12 +300,18 @@ export default function QuizEngine({
     <div className="space-y-6">
       {showSubmitConfirm ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-            <h2 className="text-xl font-bold">Submit test?</h2>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="submit-test-title"
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+          >
+            <h2 id="submit-test-title" className="text-xl font-bold">
+              Submit test?
+            </h2>
 
             <p className="mt-3 text-sm leading-6 text-slate-600">
-              Once submitted, you cannot change your answers. Please confirm
-              only if you are ready to finish the test.
+              Once submitted, you cannot change your answers.
             </p>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
@@ -320,11 +329,17 @@ export default function QuizEngine({
             </div>
 
             {unansweredCount > 0 ? (
-              <p className="mt-4 rounded-xl bg-yellow-50 p-3 text-sm text-yellow-800">
+              <p className="mt-4 rounded-xl bg-yellow-50 p-3 text-sm leading-6 text-yellow-800">
                 You still have {unansweredCount} unanswered question
-                {unansweredCount === 1 ? "" : "s"}.
+                {unansweredCount === 1 ? "" : "s"}. You can continue the test
+                and answer them before final submission.
               </p>
-            ) : null}
+            ) : (
+              <p className="mt-4 rounded-xl bg-green-50 p-3 text-sm leading-6 text-green-800">
+                All questions are attempted. You can submit now or review your
+                answers once more.
+              </p>
+            )}
 
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
               <button
@@ -332,7 +347,7 @@ export default function QuizEngine({
                 onClick={closeSubmitConfirmation}
                 className="rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold"
               >
-                Continue Test
+                {unansweredCount > 0 ? "Continue Test" : "Review Answers"}
               </button>
 
               <button
