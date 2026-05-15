@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Question = {
   id: number;
@@ -23,14 +23,24 @@ type QuizEngineProps = {
 
 type AnswerMap = Record<number, "A" | "B" | "C" | "D">;
 
+function formatTime(totalSeconds: number) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
 export default function QuizEngine({
   title,
   durationMinutes,
   questions,
 }: QuizEngineProps) {
+  const totalSeconds = durationMinutes * 60;
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<AnswerMap>({});
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [remainingSeconds, setRemainingSeconds] = useState(totalSeconds);
 
   const currentQuestion = questions[currentIndex];
 
@@ -44,6 +54,24 @@ export default function QuizEngine({
 
   const attemptedCount = Object.keys(answers).length;
   const totalQuestions = questions.length;
+
+  useEffect(() => {
+    if (isSubmitted || questions.length === 0) return;
+
+    const timer = window.setInterval(() => {
+      setRemainingSeconds((previous) => {
+        if (previous <= 1) {
+          window.clearInterval(timer);
+          setIsSubmitted(true);
+          return 0;
+        }
+
+        return previous - 1;
+      });
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [isSubmitted, questions.length]);
 
   function selectAnswer(questionId: number, option: "A" | "B" | "C" | "D") {
     if (isSubmitted) return;
@@ -62,6 +90,10 @@ export default function QuizEngine({
     setCurrentIndex((index) => Math.min(index + 1, totalQuestions - 1));
   }
 
+  function submitTest() {
+    setIsSubmitted(true);
+  }
+
   if (questions.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-slate-300 p-5">
@@ -78,9 +110,10 @@ export default function QuizEngine({
       <div className="space-y-6">
         <section className="rounded-2xl border border-slate-200 p-5 shadow-sm">
           <p className="text-sm font-semibold text-blue-700">Result</p>
+
           <h1 className="mt-2 text-3xl font-bold">{title}</h1>
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          <div className="mt-5 grid gap-3 sm:grid-cols-4">
             <div className="rounded-xl bg-slate-50 p-4">
               <p className="text-sm text-slate-600">Score</p>
               <p className="mt-1 text-2xl font-bold">
@@ -99,6 +132,13 @@ export default function QuizEngine({
                 {attemptedCount === 0
                   ? "0%"
                   : `${Math.round((score / attemptedCount) * 100)}%`}
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-slate-50 p-4">
+              <p className="text-sm text-slate-600">Time Left</p>
+              <p className="mt-1 text-2xl font-bold">
+                {formatTime(remainingSeconds)}
               </p>
             </div>
           </div>
@@ -132,10 +172,17 @@ export default function QuizEngine({
                 <div className="mt-4 rounded-xl bg-slate-50 p-4 text-sm">
                   <p>
                     Your Answer:{" "}
-                    <span className={isCorrect ? "font-bold text-green-700" : "font-bold text-red-700"}>
+                    <span
+                      className={
+                        isCorrect
+                          ? "font-bold text-green-700"
+                          : "font-bold text-red-700"
+                      }
+                    >
                       {selectedAnswer ?? "Not Attempted"}
                     </span>
                   </p>
+
                   <p className="mt-1">
                     Correct Answer:{" "}
                     <span className="font-bold text-green-700">
@@ -166,8 +213,14 @@ export default function QuizEngine({
             <h1 className="mt-2 text-2xl font-bold">{title}</h1>
           </div>
 
-          <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
-            Duration: {durationMinutes} minutes
+          <div
+            className={`rounded-xl px-4 py-3 text-sm font-semibold ${
+              remainingSeconds <= 60
+                ? "bg-red-50 text-red-700"
+                : "bg-slate-50 text-slate-700"
+            }`}
+          >
+            Time Left: {formatTime(remainingSeconds)}
           </div>
         </div>
 
@@ -187,12 +240,10 @@ export default function QuizEngine({
       </section>
 
       <section className="rounded-2xl border border-slate-200 p-5 shadow-sm">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm font-semibold text-slate-500">
-            {currentQuestion.subject ?? "General"} ·{" "}
-            {currentQuestion.difficulty ?? "medium"}
-          </p>
-        </div>
+        <p className="text-sm font-semibold text-slate-500">
+          {currentQuestion.subject ?? "General"} ·{" "}
+          {currentQuestion.difficulty ?? "medium"}
+        </p>
 
         <h2 className="mt-4 text-xl font-semibold leading-8">
           {currentQuestion.question}
@@ -239,23 +290,33 @@ export default function QuizEngine({
             Previous
           </button>
 
-          {currentIndex === totalQuestions - 1 ? (
+          <div className="flex flex-col gap-3 sm:flex-row">
             <button
               type="button"
-              onClick={() => setIsSubmitted(true)}
-              className="rounded-xl bg-blue-700 px-4 py-3 text-sm font-semibold text-white"
+              onClick={submitTest}
+              className="rounded-xl border border-red-200 px-4 py-3 text-sm font-semibold text-red-700"
             >
-              Submit Test
+              Submit
             </button>
-          ) : (
-            <button
-              type="button"
-              onClick={goToNext}
-              className="rounded-xl bg-blue-700 px-4 py-3 text-sm font-semibold text-white"
-            >
-              Next
-            </button>
-          )}
+
+            {currentIndex === totalQuestions - 1 ? (
+              <button
+                type="button"
+                onClick={submitTest}
+                className="rounded-xl bg-blue-700 px-4 py-3 text-sm font-semibold text-white"
+              >
+                Submit Test
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={goToNext}
+                className="rounded-xl bg-blue-700 px-4 py-3 text-sm font-semibold text-white"
+              >
+                Next
+              </button>
+            )}
+          </div>
         </div>
       </section>
     </div>
