@@ -41,6 +41,7 @@ export default function QuizEngine({
   const [answers, setAnswers] = useState<AnswerMap>({});
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [remainingSeconds, setRemainingSeconds] = useState(totalSeconds);
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
 
   const currentQuestion = questions[currentIndex];
 
@@ -54,6 +55,7 @@ export default function QuizEngine({
 
   const attemptedCount = Object.keys(answers).length;
   const totalQuestions = questions.length;
+  const unansweredCount = totalQuestions - attemptedCount;
 
   useEffect(() => {
     if (isSubmitted || questions.length === 0) return;
@@ -62,6 +64,7 @@ export default function QuizEngine({
       setRemainingSeconds((previous) => {
         if (previous <= 1) {
           window.clearInterval(timer);
+          setShowSubmitConfirm(false);
           setIsSubmitted(true);
           return 0;
         }
@@ -90,7 +93,16 @@ export default function QuizEngine({
     setCurrentIndex((index) => Math.min(index + 1, totalQuestions - 1));
   }
 
+  function openSubmitConfirmation() {
+    setShowSubmitConfirm(true);
+  }
+
+  function closeSubmitConfirmation() {
+    setShowSubmitConfirm(false);
+  }
+
   function submitTest() {
+    setShowSubmitConfirm(false);
     setIsSubmitted(true);
   }
 
@@ -206,6 +218,58 @@ export default function QuizEngine({
 
   return (
     <div className="space-y-6">
+      {showSubmitConfirm ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h2 className="text-xl font-bold">Submit test?</h2>
+
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              Once submitted, you cannot change your answers. Please confirm
+              only if you are ready to finish the test.
+            </p>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl bg-slate-50 p-4">
+                <p className="text-sm text-slate-600">Attempted</p>
+                <p className="mt-1 text-2xl font-bold">
+                  {attemptedCount}/{totalQuestions}
+                </p>
+              </div>
+
+              <div className="rounded-xl bg-slate-50 p-4">
+                <p className="text-sm text-slate-600">Unanswered</p>
+                <p className="mt-1 text-2xl font-bold">{unansweredCount}</p>
+              </div>
+            </div>
+
+            {unansweredCount > 0 ? (
+              <p className="mt-4 rounded-xl bg-yellow-50 p-3 text-sm text-yellow-800">
+                You still have {unansweredCount} unanswered question
+                {unansweredCount === 1 ? "" : "s"}.
+              </p>
+            ) : null}
+
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={closeSubmitConfirmation}
+                className="rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold"
+              >
+                Continue Test
+              </button>
+
+              <button
+                type="button"
+                onClick={submitTest}
+                className="rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white"
+              >
+                Yes, Submit
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <section className="rounded-2xl border border-slate-200 p-5 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -290,33 +354,23 @@ export default function QuizEngine({
             Previous
           </button>
 
-          <div className="flex flex-col gap-3 sm:flex-row">
+          {currentIndex === totalQuestions - 1 ? (
             <button
               type="button"
-              onClick={submitTest}
-              className="rounded-xl border border-red-200 px-4 py-3 text-sm font-semibold text-red-700"
+              onClick={openSubmitConfirmation}
+              className="rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white"
             >
-              Submit
+              Finish Test
             </button>
-
-            {currentIndex === totalQuestions - 1 ? (
-              <button
-                type="button"
-                onClick={submitTest}
-                className="rounded-xl bg-blue-700 px-4 py-3 text-sm font-semibold text-white"
-              >
-                Submit Test
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={goToNext}
-                className="rounded-xl bg-blue-700 px-4 py-3 text-sm font-semibold text-white"
-              >
-                Next
-              </button>
-            )}
-          </div>
+          ) : (
+            <button
+              type="button"
+              onClick={goToNext}
+              className="rounded-xl bg-blue-700 px-4 py-3 text-sm font-semibold text-white"
+            >
+              Next
+            </button>
+          )}
         </div>
       </section>
     </div>
