@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createSupabaseBrowserClient } from "@/lib/supabase";
 
 type Question = {
   id: number;
@@ -16,6 +17,7 @@ type Question = {
 };
 
 type QuizEngineProps = {
+  mockTestId: number;
   title: string;
   durationMinutes: number;
   questions: Question[];
@@ -31,17 +33,22 @@ function formatTime(totalSeconds: number) {
 }
 
 export default function QuizEngine({
+  mockTestId,
   title,
   durationMinutes,
   questions,
 }: QuizEngineProps) {
   const totalSeconds = durationMinutes * 60;
 
+  const submitStartedRef = useRef(false);
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<AnswerMap>({});
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [remainingSeconds, setRemainingSeconds] = useState(totalSeconds);
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
+  const [saveMessage, setSaveMessage] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   const currentQuestion = questions[currentIndex];
 
@@ -56,6 +63,8 @@ export default function QuizEngine({
   const attemptedCount = Object.keys(answers).length;
   const totalQuestions = questions.length;
   const unansweredCount = totalQuestions - attemptedCount;
+  const wrongAnswers = attemptedCount - score;
+  const timeTakenSeconds = Math.max(0, totalSeconds - remainingSeconds);
 
   useEffect(() => {
     if (isSubmitted || questions.length === 0) return;
@@ -64,8 +73,6 @@ export default function QuizEngine({
       setRemainingSeconds((previous) => {
         if (previous <= 1) {
           window.clearInterval(timer);
-          setShowSubmitConfirm(false);
-          setIsSubmitted(true);
           return 0;
         }
 
@@ -75,6 +82,13 @@ export default function QuizEngine({
 
     return () => window.clearInterval(timer);
   }, [isSubmitted, questions.length]);
+
+  useEffect(() => {
+    if (remainingSeconds === 0 && !isSubmitted && questions.length > 0) {
+      void submitTest("auto");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remainingSeconds, isSubmitted, questions.length]);
 
   function selectAnswer(questionId: number, option: "A" | "B" | "C" | "D") {
     if (isSubmitted) return;
@@ -101,9 +115,58 @@ export default function QuizEngine({
     setShowSubmitConfirm(false);
   }
 
-  function submitTest() {
+  async function submitTest(mode: "manual" | "auto" = "manual") {
+    if (submitStartedRef.current) return;
+
+    submitStartedRef.current = true;
+
+    const finalScore = score;
+    const finalAttemptedCount = attemptedCount;
+    const finalWrongAnswers = wrongAnswers;
+    const finalUnansweredCount = unansweredCount;
+    const finalTimeTakenSeconds =
+      mode === "auto" ? totalSeconds : timeTakenSeconds;
+
     setShowSubmitConfirm(false);
     setIsSubmitted(true);
+    setIsSaving(true);
+    setSaveMessage(mode === "auto" ? "Time is up. Saving your result..." : "");
+
+    const supabase = createSupabaseBrowserClient();
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      setSaveMessage("Result shown locally. Login is required to save progress.");
+      setIsSaving(false);
+      return;
+    }
+
+    const { error } = await supabase.from("progress").insert({
+      user_id: user.id,
+      mock_test_id: mockTestId,
+      score: finalScore,
+      total_questions: totalQuestions,
+      correct_answers: finalScore,
+      wrong_answers: finalWrongAnswers,
+      skipped_questions: finalUnansweredCount,
+      time_taken_seconds: finalTimeTakenSeconds,
+    });
+
+    if (error) {
+      setSaveMessage(
+        `Result shown locally. Could not save progress: ${error.message}`
+      );
+    } else {
+      setSaveMessage(
+        `Result saved to your dashboard. Attempted ${finalAttemptedCount}/${totalQuestions}.`
+      );
+    }
+
+    setIsSaving(false);
   }
 
   if (questions.length === 0) {
@@ -148,12 +211,16 @@ export default function QuizEngine({
             </div>
 
             <div className="rounded-xl bg-slate-50 p-4">
-              <p className="text-sm text-slate-600">Time Left</p>
+              <p className="text-sm text-slate-600">Time Taken</p>
               <p className="mt-1 text-2xl font-bold">
-                {formatTime(remainingSeconds)}
+                {formatTime(timeTakenSeconds)}
               </p>
             </div>
           </div>
+
+          <p className="mt-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
+            {isSaving ? "Saving result..." : saveMessage}
+          </p>
         </section>
 
         <section className="space-y-4">
@@ -216,6 +283,16 @@ export default function QuizEngine({
     );
   }
 
+  const answerOptions: Array<{
+    key: "A" | "B" | "C" | "D";
+    text: string;
+  }> = [
+    { key: "A", text: currentQuestion.option_a },
+    { key: "B", text: currentQuestion.option_b },
+    { key: "C", text: currentQuestion.option_c },
+    { key: "D", text: currentQuestion.option_d },
+  ];
+
   return (
     <div className="space-y-6">
       {showSubmitConfirm ? (
@@ -260,7 +337,7 @@ export default function QuizEngine({
 
               <button
                 type="button"
-                onClick={submitTest}
+                onClick={() => void submitTest("manual")}
                 className="rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white"
               >
                 Yes, Submit
@@ -314,31 +391,21 @@ export default function QuizEngine({
         </h2>
 
         <div className="mt-6 grid gap-3">
-          {[
-            ["A", currentQuestion.option_a],
-            ["B", currentQuestion.option_b],
-            ["C", currentQuestion.option_c],
-            ["D", currentQuestion.option_d],
-          ].map(([option, text]) => {
-            const isSelected = answers[currentQuestion.id] === option;
+          {answerOptions.map((option) => {
+            const isSelected = answers[currentQuestion.id] === option.key;
 
             return (
               <button
-                key={option}
+                key={option.key}
                 type="button"
-                onClick={() =>
-                  selectAnswer(
-                    currentQuestion.id,
-                    option as "A" | "B" | "C" | "D"
-                  )
-                }
+                onClick={() => selectAnswer(currentQuestion.id, option.key)}
                 className={`rounded-xl border px-4 py-3 text-left text-sm font-medium transition ${
                   isSelected
                     ? "border-blue-700 bg-blue-50 text-blue-900"
                     : "border-slate-200 hover:border-blue-300"
                 }`}
               >
-                <span className="font-bold">{option}.</span> {text}
+                <span className="font-bold">{option.key}.</span> {option.text}
               </button>
             );
           })}

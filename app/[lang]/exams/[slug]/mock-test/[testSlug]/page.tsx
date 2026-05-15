@@ -88,6 +88,7 @@ async function getMockTest(testSlug: string) {
     }));
 
   return {
+    mockTestId: mockTest.id as number,
     title: mockTest.title as string,
     durationMinutes: mockTest.duration_minutes as number,
     questions,
@@ -114,6 +115,7 @@ export default async function MockTestAttemptPage({ params }: PageProps) {
 
         <div className="mt-6">
           <QuizEngine
+            mockTestId={mockTest.mockTestId}
             title={mockTest.title}
             durationMinutes={mockTest.durationMinutes}
             questions={mockTest.questions}
